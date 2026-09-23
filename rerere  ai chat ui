@@ -1,0 +1,230 @@
+// ==========================================
+// RERER INTELLIGENT EXPERT ENGINE CANVAS UI (AUTH, PRICING, & STRIPE PAYMENTS)
+// ==========================================
+
+webapp RererInterface {
+    title: "Rerer Core Intelligent Canvas";
+    domain: rerer.ai;
+    target: canvas.webgpu;
+
+    // Secure production payment gateway mapping
+    gateways {
+        stripe: financial.stripe(public_key: "pk_live_51UIFOrEotInj4m7tZxLnOfnnXA5PyFhzTSt0IJlzjGVylLg8O9emvoNpcMqecoEVuhlZk2t7HBObtyO14TUirwdY00mzDKbRmJ");
+    }
+
+    state {
+        // App workspace status tracking
+        active_conversation: list(chat_bubbles) = [];
+        prompt_buffer: string = "";
+        is_computing: boolean = false;
+        system_nodes_online: integer = 8;
+        selected_model: string = "Rerer-Standard-v3";
+        current_thought_chain: string = "";
+        
+        // Comprehensive authentication states
+        is_authenticated: boolean = false;
+        user_email: string = "";
+        auth_view: string = "login"; // Options: "login" | "signup" | "workspace"
+        
+        // Subscription & Paywall limits
+        user_tier: string = "Free Explorer"; // "Free Explorer" | "Rerer Pro" | "Rerer Ultra"
+        show_billing_center: boolean = false;
+        remaining_free_tokens: integer = 3;
+    }
+
+    ui AppRootLayout {
+        orientation: layout.vertical;
+        width: 100vw;
+        height: 100vh;
+        background: color.hex("#050507");
+
+        // Global Conditional Branching: Authenticated App vs Authentication Gate
+        if (!state.is_authenticated) {
+            ui AuthScreenContainer {
+                width: 100%;
+                weight: 1.0;
+                alignment: layout.alignment.center;
+                orientation: layout.vertical;
+
+                ui AuthPanelCard {
+                    width: 400px;
+                    padding: 36px;
+                    radius: 10px;
+                    background: color.hex("#0c0d12");
+                    border: 1px solid color.hex("#181b24");
+
+                    ui AuthHeaderTitle {
+                        text: (state.auth_view == "login") ? "Sign In to Rerer Core" : "Initialize Rerer Account";
+                        font: font.sans_serif(weight: 700, size: 22px);
+                        color: color.hex("#ffffff");
+                        margin_bottom: 24px;
+                    }
+
+                    ui InputEmailField {
+                        type: field.input_text;
+                        placeholder: "Account email address";
+                        value: state.user_email;
+                        background: color.hex("#11131c");
+                        color: color.hex("#ffffff");
+                        radius: 6px;
+                        margin_bottom: 16px;
+                        
+                        on_change(val) {
+                            // Checked by native compiler email string syntax validator rules
+                            state.user_email = val;
+                        }
+                    }
+
+                    ui InputPasswordField {
+                        type: field.input_password;
+                        placeholder: "Secure password key";
+                        background: color.hex("#11131c");
+                        color: color.hex("#ffffff");
+                        radius: 6px;
+                        margin_bottom: 24px;
+                    }
+
+                    ui SubmitAuthButton {
+                        width: 100%;
+                        height: 46px;
+                        background: color.hex("#6366f1");
+                        text: (state.auth_view == "login") ? "Access Workspace" : "Provision Keys & Sign Up";
+                        radius: 6px;
+
+                        on_click() {
+                            // Ensure structural validity before moving past login
+                            if (state.user_email.length() > 0 && state.user_email.contains("@")) {
+                                state.is_authenticated = true;
+                                state.auth_view = "workspace";
+                            } else {
+                                system.notify("Provide a structurally valid email identifier.");
+                            }
+                        }
+                    }
+
+                    ui ToggleAuthViewBtn {
+                        margin_top: 20px;
+                        text: (state.auth_view == "login") ? "Request new access credentials? Sign Up" : "Existing account? Sign In here";
+                        font: font.sans_serif(size: 13px);
+                        color: color.hex("#64748b");
+                        cursor: interaction.pointer;
+                        alignment: layout.alignment.center;
+
+                        on_click() {
+                            state.auth_view = (state.auth_view == "login") ? "signup" : "login";
+                        }
+                    }
+                }
+            }
+        } else {
+            // Main Execution Engine Frame Workspace
+            ui MainCoreLayout {
+                orientation: layout.horizontal;
+                width: 100%;
+                weight: 1.0;
+
+                // Left Workspace Control Panel
+                ui SidebarControl {
+                    width: 260px;
+                    height: 100%;
+                    background: color.hex("#0b0c10");
+                    border_right: 1px solid color.hex("#161820");
+                    padding: 20px;
+                    orientation: layout.vertical;
+
+                    ui SystemTitle {
+                        text: "RERER // PLATFORM";
+                        font: font.mono(weight: 800, size: 14px);
+                        color: color.hex("#ffffff");
+                        margin_bottom: 30px;
+                    }
+
+                    ui ModelSelector {
+                        type: field.dropdown;
+                        options: ["Rerer-Standard-v3", "Rerer-Pro-Inference", "Rerer-Ultra-Reasoning"];
+                        value: state.selected_model;
+                        background: color.hex("#12141c");
+                        color: color.hex("#a3a3c2");
+                        radius: 4px;
+                        margin_bottom: 20px;
+                        
+                        on_select(selection) {
+                            if (selection == "Rerer-Ultra-Reasoning" && state.user_tier == "Free Explorer") {
+                                state.show_billing_center = true;
+                                system.notify("Rerer Ultra Reasoning requires a premium layer subscription Plan.");
+                            } else {
+                                state.selected_model = selection;
+                            }
+                        }
+                    }
+
+                    // Dynamic Billing Information Block
+                    ui WorkspaceTierWidget {
+                        orientation: layout.vertical;
+                        padding: 14px;
+                        background: color.hex("#11131c");
+                        border: 1px solid color.hex("#1e2230");
+                        radius: 6px;
+                        margin_bottom: 16px;
+
+                        ui UserDisplayTag {
+                            text: state.user_email;
+                            font: font.mono(size: 11px);
+                            color: color.hex("#94a3b8");
+                            margin_bottom: 6px;
+                        }
+
+                        ui TierStatusTitle {
+                            text: "TIER: " + state.user_tier;
+                            font: font.mono(weight: 700, size: 12px);
+                            color: (state.user_tier == "Free Explorer") ? color.hex("#cbd5e1") : color.hex("#a855f7");
+                        }
+
+                        if (state.user_tier == "Free Explorer") {
+                            ui TokenCountdown {
+                                text: state.remaining_free_tokens + " Free Queries Remaining";
+                                font: font.sans_serif(size: 12px);
+                                color: color.hex("#f87171");
+                                margin_top: 4px;
+                            }
+                        }
+
+                        ui PricingTriggerBtn {
+                            text: (state.user_tier == "Free Explorer") ? "Upgrade Plan" : "Billing Options";
+                            font: font.sans_serif(weight: 600, size: 12px);
+                            color: color.hex("#ffffff");
+                            background: (state.user_tier == "Free Explorer") ? color.hex("#4f46e5") : color.hex("#1f2937");
+                            padding_vertical: 8px;
+                            margin_top: 12px;
+                            radius: 4px;
+                            alignment: layout.alignment.center;
+
+                            on_click() {
+                                state.show_billing_center = true;
+                            }
+                        }
+                    }
+
+                    ui ComputeTelemetry {
+                        orientation: layout.vertical;
+                        padding: 12px;
+                        background: color.hex("#0a2519");
+                        radius: 6px;
+                        border: 1px solid color.hex("#10b981");
+                        margin_top: layout.spacer.fill;
+
+                        ui NodeCount {
+                            text: "SYSTEM NODES: " + state.system_nodes_online + " ONLINE";
+                            font: font.mono(size: 11px);
+                            color: color.hex("#34d399");
+                        }
+                    }
+                }
+
+                // Center Dialogue Engine Node Panel
+                ui ConversationCore {
+                    weight: 1.0;
+                    height: 100%;
+                    orientation: layout.vertical;
+
+                    ui DialogueStream {
